@@ -966,7 +966,8 @@ function withLibs(urls, cb){
   try{
     // Panggilan nyata (bukan sekadar GET): membangunkan server DAN mengisi cache
     // akun + agenda + pengajuan selagi admin mengetik username.
-    google.script.run.withSuccessHandler(function(){}).withFailureHandler(function(){}).warm(window.ADMIN_PAGE.key);
+    var _hasSess=false; try{ _hasSess=!!sessionStorage.getItem('adm_sess_'+window.ADMIN_PAGE.key); }catch(e){}
+    if(!_hasSess) google.script.run.withSuccessHandler(function(){}).withFailureHandler(function(){}).warm(window.ADMIN_PAGE.key);
   }catch(e){}
 })();
 
@@ -1261,17 +1262,9 @@ function closeSidebar(){
 
 // ── LOGIN ──────────────────────────────────────────────────
 
-function doAdminLogin(){
-  var u=document.getElementById('admin-user').value.trim();
-  if(!u){ showToast('Masukkan username.','warning'); return; }
-
-  var btn=document.getElementById('btn-admin-login');
-  btn.innerHTML='<span class="spinner"></span> Memverifikasi...'; btn.disabled=true;
-
-  google.script.run
-    .withSuccessHandler(function(r){
-      btn.innerHTML='Masuk'; btn.disabled=false;
-      if(r && r.success){
+// Terapkan hasil login/pemulihan sesi ke UI (dipakai saat login dan saat refresh halaman)
+var SESS_KEY = 'adm_sess_' + window.ADMIN_PAGE.key;
+function applyLoginResult(r){
         document.getElementById('admin-nama').textContent = r.nama;
         currentRole      = r.role;
         isSuperadmin     = !!r.isSuperadmin;
@@ -1303,6 +1296,41 @@ function doAdminLogin(){
         if(r.modulList && r.modulList.length) modulList = r.modulList;
         if(pimpinanList.length) afterPimpinanReady();
         else loadPimpinanList(afterPimpinanReady);
+        try{ sessionStorage.setItem(SESS_KEY, sessionToken); }catch(e){}
+}
+
+// Refresh halaman: jika token sesi masih ada, pulihkan tanpa login ulang
+(function resumeSession(){
+  var tok=''; try{ tok = sessionStorage.getItem(SESS_KEY) || ''; }catch(e){}
+  if(!tok) return;
+  var lp=document.getElementById('login-page'); lp.style.display='none';
+  setLoading(true,'Memulihkan sesi...');
+  function keLogin(clear){
+    setLoading(false);
+    if(clear){ try{ sessionStorage.removeItem(SESS_KEY); }catch(e){} }
+    lp.style.display='';
+  }
+  google.script.run
+    .withSuccessHandler(function(r){
+      if(r && r.success){ setLoading(false); applyLoginResult(r); }
+      else keLogin(true);
+    })
+    .withFailureHandler(function(){ keLogin(false); })
+    .resumeSesi(tok, window.ADMIN_PAGE.key);
+})();
+
+function doAdminLogin(){
+  var u=document.getElementById('admin-user').value.trim();
+  if(!u){ showToast('Masukkan username.','warning'); return; }
+
+  var btn=document.getElementById('btn-admin-login');
+  btn.innerHTML='<span class="spinner"></span> Memverifikasi...'; btn.disabled=true;
+
+  google.script.run
+    .withSuccessHandler(function(r){
+      btn.innerHTML='Masuk'; btn.disabled=false;
+      if(r && r.success){
+        applyLoginResult(r);
       } else {
         showToast((r && r.message)||'Login gagal.','error');
       }
@@ -1359,6 +1387,7 @@ function updatePimpinanPageLabels(){
 function loadCalendarSettingsIfVisible(){ /* no-op helper kept for clarity */ }
 
 function doLogout(){
+  try{ sessionStorage.removeItem(SESS_KEY); }catch(e){}
   document.getElementById('admin-app').style.display='none';
   document.getElementById('login-page').style.display='';
   document.getElementById('admin-user').value='';
