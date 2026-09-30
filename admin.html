@@ -4,8 +4,10 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Admin - Agenda & Pengajuan Tamu</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap">
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap');
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{
   --navy:#0757a6;--navy2:#0b8fd8;--gold:#ffc83d;--gold2:#ffdb70;
@@ -30,7 +32,7 @@ body{font-family:var(--font);background:linear-gradient(180deg,#eaf6ff 0%,#f7fcf
 .user-badge{background:rgba(255,255,255,.18);border:1px solid rgba(255,255,255,.3);border-radius:20px;padding:5px 15px;font-size:.82rem;display:flex;align-items:center;gap:6px;white-space:nowrap}
 .btn-logout{background:rgba(255,255,255,.2);border:1px solid rgba(255,255,255,.5);color:var(--white);border-radius:11px;padding:6px 14px;cursor:pointer;font-size:.82rem;font-family:var(--font);font-weight:600;transition:all .2s var(--ease);white-space:nowrap}
 .btn-logout:hover{background:var(--white);color:var(--navy)}
-.sidebar-overlay{display:none;position:fixed;top:66px;left:0;right:0;bottom:0;background:rgba(9,35,58,.5);backdrop-filter:blur(1px);z-index:150}
+.sidebar-overlay{display:none;position:fixed;top:66px;left:0;right:0;bottom:0;background:rgba(9,35,58,.5);z-index:150}
 .sidebar-overlay.show{display:block}
 
 /* ── SIDEBAR ── */
@@ -101,7 +103,7 @@ tbody td{padding:11px 14px;vertical-align:middle}
 .badge-rejected{background:var(--red2);color:var(--red)}
 
 /* ── MODAL ── */
-.modal-overlay{display:none;position:fixed;inset:0;background:rgba(9,35,58,.55);z-index:1000;align-items:center;justify-content:center;padding:1rem;backdrop-filter:blur(3px)}
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(9,35,58,.55);z-index:1000;align-items:center;justify-content:center;padding:1rem}
 .modal-overlay.open{display:flex}
 .modal{background:var(--white);border-radius:22px;box-shadow:0 26px 76px rgba(3,80,120,.32);width:100%;max-width:620px;max-height:90vh;overflow-y:auto;animation:modalIn .25s var(--ease)}
 .modal.wide{max-width:760px}
@@ -207,7 +209,7 @@ tbody td{padding:11px 14px;vertical-align:middle}
 /* ── LOADING ── */
 .spinner{display:inline-block;width:16px;height:16px;border:2px solid rgba(255,255,255,.3);border-top-color:var(--white);border-radius:50%;animation:spin .6s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
-.loading-overlay{display:none;position:fixed;inset:0;background:rgba(234,246,255,.88);backdrop-filter:blur(2px);z-index:999;align-items:center;justify-content:center;flex-direction:column;gap:12px}
+.loading-overlay{display:none;position:fixed;inset:0;background:rgba(234,246,255,.92);z-index:999;align-items:center;justify-content:center;flex-direction:column;gap:12px}
 .loading-overlay.show{display:flex}
 .loading-spinner{width:40px;height:40px;border:3px solid var(--gray2);border-top-color:var(--navy);border-radius:50%;animation:spin .7s linear infinite}
 
@@ -396,9 +398,6 @@ tbody tr:hover{background:rgba(255,200,61,.12)}
 @media(max-width:900px){.topbar .logo-img{width:114px;height:37px}}
 @media(max-width:600px){.logo-img{width:104px;height:33px}.logo-badge.md .logo-img{width:128px;height:41px}.logo-badge.lg .logo-img{width:180px;height:58px}.tamu-header .logo-img{width:112px;height:36px}.bt-brand .logo-img{width:114px;height:37px}.tamu-header .brand>span{padding-left:10px}}
 </style>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="config.js"></script>
 <script src="gas-shim.js"></script>
 </head>
@@ -1007,6 +1006,41 @@ tbody tr:hover{background:rgba(255,200,61,.12)}
 <!--  JAVASCRIPT                                            -->
 <!-- ═══════════════════════════════════════════════════════ -->
 <script>
+// ── PEMUAT LIBRARY ON-DEMAND (PDF/Excel dimuat hanya saat diexport) ──
+var _libPromises = {};
+function loadScriptOnce(src){
+  if(!_libPromises[src]){
+    _libPromises[src] = new Promise(function(resolve, reject){
+      var el = document.createElement('script');
+      el.src = src; el.async = true;
+      el.onload = resolve;
+      el.onerror = function(){ delete _libPromises[src]; reject(new Error('Gagal memuat '+src)); };
+      document.head.appendChild(el);
+    });
+  }
+  return _libPromises[src];
+}
+var LIB_PDF = [
+  'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',
+  'https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js'
+];
+var LIB_XLSX = ['https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js'];
+// Muat berurutan (autotable butuh jsPDF), lalu jalankan cb
+function withLibs(urls, cb){
+  showToast('Menyiapkan pustaka export...');
+  urls.reduce(function(p,u){ return p.then(function(){ return loadScriptOnce(u); }); }, Promise.resolve())
+    .then(cb)
+    .catch(function(e){ showToast('Gagal memuat pustaka export. Periksa koneksi internet.','error'); });
+}
+
+// ── PEMANASAN SERVER: Apps Script "tidur" saat lama tidak dipakai; ping
+// ringan saat halaman dibuka agar login tidak menunggu cold-start.
+(function warmUpServer(){
+  try{
+    if(window.GAS_API_URL) fetch(window.GAS_API_URL, {method:'GET', mode:'no-cors', cache:'no-store'}).catch(function(){});
+  }catch(e){}
+})();
+
 // ── STATE ─────────────────────────────────────────────────
 var agendaData    = [];
 var pengajuanData = [];
@@ -1466,13 +1500,18 @@ function doAdminLogin(){
           applyMenuAccess();
           var first = firstAllowedPage();
           if(first){
-            if(first!=='dashboard') loadCalendarSettings();
             showPage(first);
           } else {
             document.querySelectorAll('.page').forEach(function(el){ el.classList.remove('active'); });
             showToast('Akun ini belum memiliki akses menu apa pun. Hubungi superadmin.','warning');
           }
         }
+        if(r.pimpinanList && r.pimpinanList.length){
+          pimpinanList = r.pimpinanList;
+          PIMPINAN_LABELS = {};
+          pimpinanList.forEach(function(p){ PIMPINAN_LABELS[p.key] = p.label; });
+        }
+        if(r.modulList && r.modulList.length) modulList = r.modulList;
         if(pimpinanList.length) afterPimpinanReady();
         else loadPimpinanList(afterPimpinanReady);
       } else {
@@ -1518,7 +1557,6 @@ function onPimpinanSwitch(){
   else if(p==='pengajuan') loadPengajuan();
   else if(p==='laporan'){ initLaporanHarian(); loadCalendarSettingsIfVisible(); }
   else if(p==='email') loadEmailKalender();
-  loadCalendarSettings();
 }
 
 // Perbarui judul halaman agar menunjukkan pimpinan yang sedang aktif
@@ -1565,76 +1603,53 @@ function showPage(p){
 // Pemuatan SEQUENTIAL: getAgenda dulu, lalu getPengajuan di dalam callback
 // Dengan try/catch di tiap handler agar loading tidak macet
 function loadDashboard(){
-  setLoading(true,'Memuat dashboard...');
-  loadCalendarSettings();
-
+  // Tanpa overlay penuh: kartu sudah menampilkan "Memuat..." sehingga menu tetap bisa dipakai.
   google.script.run
-    .withSuccessHandler(function(agData){
+    .withSuccessHandler(function(res){
+      res = res || {};
       try{
-        agendaData = agData || [];
+        agendaData = res.agenda || [];
         document.getElementById('stat-total-agenda').textContent = agendaData.length;
         document.getElementById('stat-agenda-hari-ini').textContent =
           agendaData.filter(function(a){ return s(a.tanggal) === todayStr(); }).length;
         renderDashboardAgendaModern(agendaData);
       }catch(e){ console.error('Agenda render error:',e); }
 
-      // Step 2: load pengajuan
-      google.script.run
-        .withSuccessHandler(function(pjData){
-          try{
-            pengajuanData = pjData || [];
-            var menunggu  = pengajuanData.filter(function(d){ return d.status==='Menunggu'; });
-            var disetujui = pengajuanData.filter(function(d){ return d.status==='Disetujui'; });
-            var ditolak   = pengajuanData.filter(function(d){ return d.status==='Ditolak'; });
+      try{
+        pengajuanData = res.pengajuan || [];
+        var menunggu  = pengajuanData.filter(function(d){ return d.status==='Menunggu'; });
+        var disetujui = pengajuanData.filter(function(d){ return d.status==='Disetujui'; });
+        document.getElementById('stat-menunggu').textContent  = menunggu.length;
+        document.getElementById('stat-disetujui').textContent = disetujui.length;
 
-            document.getElementById('stat-menunggu').textContent  = menunggu.length;
-            document.getElementById('stat-disetujui').textContent = disetujui.length;
-
-            var tbody=document.getElementById('tbody-pending');
-            if(menunggu.length){
-              tbody.innerHTML=menunggu.slice(0,5).map(function(p){
-                // FIX UTAMA: s() memastikan noWA selalu string meski Sheets kembalikan number
-                var wa=safeWA(p.noWA);
-                return '<tr>'
-                  +'<td><strong>'+s(p.nama)+'</strong></td>'
-                  +'<td><a href="https://wa.me/'+wa+'" target="_blank" style="color:var(--green)">'+s(p.noWA)+'</a></td>'
-                  +'<td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+s(p.keperluan)+'</td>'
-                  +'<td style="text-align:center">'+s(p.jumlahOrang)+'</td>'
-                  +'<td>'+s(p.tanggalSubmit)+'</td>'
-                  +'<td><button class="btn btn-gold btn-xs" onclick="openDetailPengajuan(\''+s(p.id)+'\')">Tinjau</button></td>'
-                  +'</tr>';
-              }).join('');
-            } else {
-              tbody.innerHTML='<tr><td colspan="6"><div class="empty-state"><div class="emoji">🎉</div><p>Tidak ada pengajuan menunggu.</p></div></td></tr>';
-            }
-          }catch(e){
-            console.error('Pengajuan render error:',e);
-            showToast('Error render pengajuan: '+e.message,'warning');
-          }
-          setLoading(false);
-        })
-        .withFailureHandler(function(e){
-          console.error('getPengajuan error:',e);
-          setLoading(false);
-          showToast('Gagal memuat pengajuan: '+(e.message||''),'error');
-        })
-        .getPengajuan(currentPimpinan);
+        var tbody=document.getElementById('tbody-pending');
+        if(menunggu.length){
+          tbody.innerHTML=menunggu.slice(0,5).map(function(p){
+            var wa=safeWA(p.noWA);
+            return '<tr>'
+              +'<td><strong>'+s(p.nama)+'</strong></td>'
+              +'<td><a href="https://wa.me/'+wa+'" target="_blank" style="color:var(--green)">'+s(p.noWA)+'</a></td>'
+              +'<td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+s(p.keperluan)+'</td>'
+              +'<td style="text-align:center">'+s(p.jumlahOrang)+'</td>'
+              +'<td>'+s(p.tanggalSubmit)+'</td>'
+              +'<td><button class="btn btn-gold btn-xs" onclick="openDetailPengajuan(\''+s(p.id)+'\')">Tinjau</button></td>'
+              +'</tr>';
+          }).join('');
+        } else {
+          tbody.innerHTML='<tr><td colspan="6"><div class="empty-state"><div class="emoji">🎉</div><p>Tidak ada pengajuan menunggu.</p></div></td></tr>';
+        }
+      }catch(e){
+        console.error('Pengajuan render error:',e);
+        showToast('Error render pengajuan: '+e.message,'warning');
+      }
+      // Pengaturan kalender dimuat SETELAH data utama tampil (tidak menghambat)
+      loadCalendarSettings();
     })
     .withFailureHandler(function(e){
-      console.error('getAgenda error:',e);
-      // Tetap coba load pengajuan walau agenda gagal
-      google.script.run
-        .withSuccessHandler(function(pjData){
-          pengajuanData=pjData||[];
-          document.getElementById('stat-menunggu').textContent  = pengajuanData.filter(function(d){return d.status==='Menunggu';}).length;
-          document.getElementById('stat-disetujui').textContent = pengajuanData.filter(function(d){return d.status==='Disetujui';}).length;
-          setLoading(false);
-        })
-        .withFailureHandler(function(){ setLoading(false); })
-        .getPengajuan(currentPimpinan);
-      showToast('Gagal memuat agenda: '+(e.message||''),'error');
+      console.error('getDashboardData error:',e);
+      showToast('Gagal memuat dashboard: '+((e&&e.message)||''),'error');
     })
-    .getAgenda(currentPimpinan);
+    .getDashboardData(currentPimpinan);
 }
 
 // ── DASHBOARD: Kartu modern "Agenda Hari Ini" & "Agenda Sebelumnya" ──
@@ -2139,7 +2154,7 @@ function exportPDFLaporanHarian(){
     return;
   }
   if(typeof window.jspdf === 'undefined'){
-    showToast('Pustaka PDF belum siap, coba lagi sesaat lagi.','error');
+    withLibs(LIB_PDF, exportPDFLaporanHarian);
     return;
   }
 
@@ -2447,7 +2462,7 @@ function exportPDFLaporanBulanan(){
     return;
   }
   if(typeof window.jspdf === 'undefined'){
-    showToast('Pustaka PDF belum siap, coba lagi sesaat lagi.','error');
+    withLibs(LIB_PDF, exportPDFLaporanBulanan);
     return;
   }
 
@@ -2527,7 +2542,7 @@ function exportExcelLaporanBulanan(){
     return;
   }
   if(typeof XLSX === 'undefined'){
-    showToast('Pustaka Excel belum siap, coba lagi sesaat lagi.','error');
+    withLibs(LIB_XLSX, exportExcelLaporanBulanan);
     return;
   }
 
@@ -2585,15 +2600,17 @@ function exportExcelLaporanBulanan(){
 var _calendarIdSaved = '';
 
 function loadCalendarSettings(){
+  var pg  = document.getElementById('page-dashboard');
   var sel = document.getElementById('sel-calendar');
   var txt = document.getElementById('cal-status-text');
-  if(!sel) return;
+  if(!sel || !pg || !pg.classList.contains('active')) return; // kartu ini hanya ada di Dashboard
   sel.innerHTML = '<option value="">⏳ Memuat...</option>';
 
   google.script.run
-    .withSuccessHandler(function(cals){
+    .withSuccessHandler(function(r){
+      var cals = (r && r.calendars) || [];
       sel.innerHTML = '';
-      if(!cals||!cals.length){
+      if(!cals.length){
         sel.innerHTML = '<option value="primary">📅 Kalender Utama (primary)</option>';
         txt.textContent = 'Tidak ada kalender lain yang ditemukan.';
         return;
@@ -2604,22 +2621,16 @@ function loadCalendarSettings(){
         opt.text  = c.name + (c.id==='primary'||c.name==='primary' ? ' (Utama)' : '');
         sel.appendChild(opt);
       });
-      // Baca setting yang tersimpan dan select sesuai
-      google.script.run
-        .withSuccessHandler(function(currentId){
-          _calendarIdSaved = currentId || 'primary';
-          sel.value = _calendarIdSaved;
-          if(!sel.value && sel.options.length) sel.selectedIndex=0;
-          txt.textContent = '✅ Tersinkron ke: ' + (sel.options[sel.selectedIndex]||{text:'-'}).text;
-        })
-        .withFailureHandler(function(){})
-        .getCalendarId(currentPimpinan);
+      _calendarIdSaved = (r && r.currentId) || 'primary';
+      sel.value = _calendarIdSaved;
+      if(!sel.value && sel.options.length) sel.selectedIndex=0;
+      txt.textContent = '✅ Tersinkron ke: ' + (sel.options[sel.selectedIndex]||{text:'-'}).text;
     })
     .withFailureHandler(function(){
       sel.innerHTML = '<option value="primary">📅 Kalender Utama (primary)</option>';
       txt.textContent = '⚠️ Gagal memuat daftar kalender.';
     })
-    .getMyCalendars();
+    .getCalendarSettings(currentPimpinan);
 }
 
 function simpanCalendarId(){
