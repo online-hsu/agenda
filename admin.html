@@ -1037,7 +1037,9 @@ function withLibs(urls, cb){
 // ringan saat halaman dibuka agar login tidak menunggu cold-start.
 (function warmUpServer(){
   try{
-    if(window.GAS_API_URL) fetch(window.GAS_API_URL, {method:'GET', mode:'no-cors', cache:'no-store'}).catch(function(){});
+    // Panggilan nyata (bukan sekadar GET): membangunkan server DAN mengisi cache
+    // akun + agenda + pengajuan selagi admin mengetik username.
+    google.script.run.withSuccessHandler(function(){}).withFailureHandler(function(){}).warm();
   }catch(e){}
 })();
 
@@ -1047,6 +1049,8 @@ var pengajuanData = [];
 var agendaSearch  = '';
 var pjFilter      = 'semua';
 var _loadTimer    = null;
+var _dashPrefetch = null;   // data dashboard yang ikut dikirim bersama respons login
+var _calLoadedFor = '';     // pimpinan yang daftar kalendernya sudah dimuat
 
 // ── MULTI-PIMPINAN ───────────────────────────────────────────
 var currentPimpinan   = '';    // 'bupati' | 'wabup' | 'sekda' | 'all'
@@ -1490,6 +1494,7 @@ function doAdminLogin(){
         sessionToken     = r.token || '';
         currentUsername  = s(r.username);
         userModul        = r.modul || [];
+        _dashPrefetch    = (r.dashboard && r.dashboardPimpinan) ? { pimpinan:r.dashboardPimpinan, data:r.dashboard, ts:Date.now() } : null;
         currentPimpinan  = isSuperadmin ? '' : r.pimpinan; // superadmin memilih sendiri via switcher
 
         function afterPimpinanReady(){
@@ -1575,6 +1580,7 @@ function doLogout(){
   document.getElementById('admin-user').value='';
   if(sessionToken){ google.script.run.logout(sessionToken); }
   sessionToken = ''; currentUsername = ''; userModul = []; akunData = []; emailData = [];
+  _dashPrefetch = null; _calLoadedFor = '';
   var ev = document.getElementById('email-view'); if(ev) ev.value = 'current';
   currentPimpinan = ''; currentRole=''; isSuperadmin=false;
 }
@@ -1602,10 +1608,8 @@ function showPage(p){
 // ── DASHBOARD ──────────────────────────────────────────────
 // Pemuatan SEQUENTIAL: getAgenda dulu, lalu getPengajuan di dalam callback
 // Dengan try/catch di tiap handler agar loading tidak macet
-function loadDashboard(){
-  // Tanpa overlay penuh: kartu sudah menampilkan "Memuat..." sehingga menu tetap bisa dipakai.
-  google.script.run
-    .withSuccessHandler(function(res){
+// Render dipisah supaya bisa dipakai oleh data bawaan login maupun hasil fetch.
+function renderDashboard(res){
       res = res || {};
       try{
         agendaData = res.agenda || [];
@@ -1644,7 +1648,17 @@ function loadDashboard(){
       }
       // Pengaturan kalender dimuat SETELAH data utama tampil (tidak menghambat)
       loadCalendarSettings();
-    })
+}
+
+function loadDashboard(){
+  // Data dashboard sudah ikut terkirim saat login → tampil seketika, tanpa menunggu server lagi.
+  var pf = _dashPrefetch; _dashPrefetch = null;
+  if(pf && pf.pimpinan === currentPimpinan && (Date.now() - pf.ts) < 60000){
+    renderDashboard(pf.data);
+    return;
+  }
+  google.script.run
+    .withSuccessHandler(renderDashboard)
     .withFailureHandler(function(e){
       console.error('getDashboardData error:',e);
       showToast('Gagal memuat dashboard: '+((e&&e.message)||''),'error');
@@ -2604,6 +2618,8 @@ function loadCalendarSettings(){
   var sel = document.getElementById('sel-calendar');
   var txt = document.getElementById('cal-status-text');
   if(!sel || !pg || !pg.classList.contains('active')) return; // kartu ini hanya ada di Dashboard
+  if(_calLoadedFor === currentPimpinan) return;                // sudah dimuat, tidak perlu panggilan server lagi
+  var _calFor = currentPimpinan;
   sel.innerHTML = '<option value="">⏳ Memuat...</option>';
 
   google.script.run
@@ -2622,6 +2638,7 @@ function loadCalendarSettings(){
         sel.appendChild(opt);
       });
       _calendarIdSaved = (r && r.currentId) || 'primary';
+      _calLoadedFor = _calFor;
       sel.value = _calendarIdSaved;
       if(!sel.value && sel.options.length) sel.selectedIndex=0;
       txt.textContent = '✅ Tersinkron ke: ' + (sel.options[sel.selectedIndex]||{text:'-'}).text;
